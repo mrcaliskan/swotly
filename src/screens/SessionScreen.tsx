@@ -879,7 +879,7 @@ export default function SessionScreen({ data, setData, pending, exit }: {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView contentContainerStyle={s.wrap} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[s.wrap, phase === "answer" && s.wrapWithActionBar]} keyboardShouldPersistTaps="handled">
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <TouchableOpacity onPress={exitSaving}><Text style={s.back}>← Save & exit</Text></TouchableOpacity>
           <TouchableOpacity onPress={toggleSound} hitSlop={{ top: 10, bottom: 10, left: 14, right: 14 }} style={s.soundPill}>
@@ -892,7 +892,7 @@ export default function SessionScreen({ data, setData, pending, exit }: {
         </View>
 
         {/* concept context strip */}
-        <View style={[s.contextStrip, { borderLeftWidth: 4, borderLeftColor: catTone(concept?.category).fg }]}>
+        <View style={[s.contextStrip, { borderLeftWidth: 5, borderLeftColor: catTone(concept?.category).fg }]}>
           <Text style={s.contextEmoji}>{ex && phase === "answer" ? "🎯" : (concept?.emoji || "📘")}</Text>
           <View style={{ flex: 1 }}>
             <Text style={s.contextTitle}>{ex && phase === "answer" ? "Mystery — can you place it?" : (concept?.title ?? "")}</Text>
@@ -900,33 +900,6 @@ export default function SessionScreen({ data, setData, pending, exit }: {
           </View>
           {combo >= 3 && <Text style={s.comboText}>🔥 {combo}</Text>}
         </View>
-
-        {/* up top, well away from the hint pill near the input below — three
-            evenly-spaced chips, real gaps between them so there's no touch
-            overlap and no risk of a hint tap landing on Skip */}
-        {phase === "answer" && (
-          <View style={s.actionChips}>
-            <TouchableOpacity onPress={reveal} hitSlop={{ top: 8, bottom: 8 }} style={s.actionChip}
-              accessibilityRole="button" accessibilityLabel="Reveal the answer">
-              <Text style={s.actionChipText}>👀 Reveal</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={shelveForLater} hitSlop={{ top: 8, bottom: 8 }} style={s.actionChip}
-              accessibilityRole="button" accessibilityLabel="Save this question for later">
-              <Text style={s.actionChipText}>🔖 Later</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={skip} hitSlop={{ top: 8, bottom: 8 }} style={s.actionChip}
-              accessibilityRole="button" accessibilityLabel="Skip this question">
-              <Text style={s.actionChipText}>Skip →</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {undoToast && (
-          <TouchableOpacity onPress={undoLast} style={s.undoToast}
-            accessibilityRole="button" accessibilityLabel={`${undoToast.msg}. Tap to undo`}>
-            <Text style={s.undoToastText}>↩️ {undoToast.msg} — tap to undo</Text>
-          </TouchableOpacity>
-        )}
 
         <Animated.View style={[s.questionCard, slideStyle, { borderLeftColor: catTone(concept?.category).fg }]}>
           <View style={s.ribbonQ}><Text style={s.ribbonQText}>{({ mcq: "✅ CHOOSE", gap: "🧩 FILL THE GAP", type: "✍️ TYPE IT", flashcard: "✍️ TYPE IT", listen: "🎧 LISTEN", fix: "🔍 FIX THE MISTAKE", stress: "🎯 TAP THE STRESS" } as any)[effType(ex!)] ?? "❓ QUESTION"}</Text></View>
@@ -1048,7 +1021,7 @@ export default function SessionScreen({ data, setData, pending, exit }: {
         {phase === "answer" && (ex!.hint || concept?.tip) && (
           hintShown ? (
             <View style={[s.hintBox, { flexDirection: "row", alignItems: "center", gap: 10 }]}>
-              <Mascot size={26} mood="tip" />
+              <View accessible={false}><Mascot size={26} mood="tip" /></View>
               <Text style={[s.hintText, { flex: 1, textAlign: "left" }]}>{ex!.hint || concept?.tip}</Text>
             </View>
           ) : (
@@ -1060,16 +1033,49 @@ export default function SessionScreen({ data, setData, pending, exit }: {
         )}
       </ScrollView>
 
+      {/* pinned above the keyboard, well below the question — a single
+          toolbar row (icon over label, hairline dividers) reads as one
+          designed control instead of three loose buttons */}
+      {phase === "answer" && (
+        <View style={s.actionBar}>
+          {undoToast && (
+            <TouchableOpacity onPress={undoLast} style={s.undoToast}
+              accessibilityRole="button" accessibilityLabel={`${undoToast.msg}. Tap to undo`}>
+              <Text style={s.undoToastText}>↩️ {undoToast.msg} — tap to undo</Text>
+            </TouchableOpacity>
+          )}
+          <View style={{ flexDirection: "row" }}>
+            <TouchableOpacity onPress={reveal} style={s.actionBarItem} hitSlop={{ top: 6, bottom: 6 }}
+              accessibilityRole="button" accessibilityLabel="Reveal the answer">
+              <Text style={s.actionBarIcon}>👀</Text>
+              <Text style={s.actionBarLabel}>Reveal</Text>
+            </TouchableOpacity>
+            <View style={s.actionBarDivider} />
+            <TouchableOpacity onPress={shelveForLater} style={s.actionBarItem} hitSlop={{ top: 6, bottom: 6 }}
+              accessibilityRole="button" accessibilityLabel="Save this question for later">
+              <Text style={s.actionBarIcon}>🔖</Text>
+              <Text style={s.actionBarLabel}>Later</Text>
+            </TouchableOpacity>
+            <View style={s.actionBarDivider} />
+            <TouchableOpacity onPress={skip} style={s.actionBarItem} hitSlop={{ top: 6, bottom: 6 }}
+              accessibilityRole="button" accessibilityLabel="Skip this question">
+              <Text style={s.actionBarIcon}>⏭️</Text>
+              <Text style={s.actionBarLabel}>Skip</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       {phase === "feedback" && (
         <View style={s.footer}>
           <Animated.View style={[s.praiseWrap, {
             transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }],
-            backgroundColor: verdict === "wrong" ? C.roseBg : C.sage,
+            backgroundColor: verdict === "wrong" ? C.roseBg : verdict === "close" ? C.amberBg : C.sage,
           }]}>
             <View accessible={false} style={{ marginBottom: 4 }}>
-              <Mascot size={30} mood={verdict === "wrong" ? "sad" : "happy"} />
+              <Mascot size={30} mood={verdict === "wrong" ? "sad" : verdict === "close" ? "tip" : "happy"} />
             </View>
-            <Text style={[s.praise, { color: verdict === "wrong" ? C.rose : C.pineDeep }]}>
+            <Text style={[s.praise, { color: verdict === "wrong" ? C.rose : verdict === "close" ? C.amberInk : C.pineDeep }]}>
               {verdict === "correct" && `${praise} ✓`}
               {verdict === "close" && "So close — watch the spelling!"}
               {verdict === "wrong" && praise}
@@ -1096,6 +1102,7 @@ export default function SessionScreen({ data, setData, pending, exit }: {
 
 const s = StyleSheet.create({
   wrap: { padding: 18, paddingBottom: 40 },
+  wrapWithActionBar: { paddingBottom: 170 }, // clears the pinned bar + undo toast, with headroom for larger accessibility text sizes
   back: { color: C.pine, fontWeight: "700", fontSize: 14, marginBottom: 14 },
   bar: { height: 6, backgroundColor: C.line, borderRadius: 4, overflow: "hidden", marginBottom: 14 },
   barRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
@@ -1163,10 +1170,16 @@ const s = StyleSheet.create({
   bigSpeak: { alignItems: "center", marginTop: 14 },
   bigSpeakLabel: { fontSize: 12, color: C.muted, marginTop: 4, fontWeight: "700" },
   nudge: { fontSize: 13, color: C.muted, textAlign: "center", marginTop: 12 },
-  actionChips: { flexDirection: "row", gap: 10, marginTop: 12 },
-  actionChip: { flex: 1, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingVertical: 9, alignItems: "center" },
-  actionChipText: { fontSize: 12.5, fontWeight: "700", color: C.muted },
-  undoToast: { backgroundColor: C.purpleBg, borderRadius: 12, paddingVertical: 9, alignItems: "center", marginTop: 10 },
+  actionBar: {
+    position: "absolute", left: 0, right: 0, bottom: 0,
+    backgroundColor: C.paper, borderTopWidth: 1, borderTopColor: C.line,
+    paddingTop: 10, paddingBottom: 14, paddingHorizontal: 10,
+  },
+  actionBarItem: { flex: 1, alignItems: "center", gap: 3, paddingVertical: 4 },
+  actionBarIcon: { fontSize: 18 },
+  actionBarLabel: { fontSize: 11.5, fontWeight: "700", color: C.muted },
+  actionBarDivider: { width: 1, backgroundColor: C.line, marginVertical: 6 },
+  undoToast: { backgroundColor: C.purpleBg, borderRadius: 12, paddingVertical: 9, alignItems: "center", marginHorizontal: 8, marginBottom: 8 },
   undoToastText: { fontSize: 12.5, fontWeight: "700", color: C.purple },
   hintPill: {
     alignSelf: "center", backgroundColor: C.amberBg, borderRadius: 999,

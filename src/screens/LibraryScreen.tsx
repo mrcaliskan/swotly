@@ -109,9 +109,6 @@ export default function LibraryScreen({ data, setData, startSession }: {
     const c = data.concepts.find((k) => k.id === id)!;
     const items = data.exercises.filter((k) => k.conceptId === c.id);
     const due = items.filter((k) => k.due <= todayKey()).length;
-    const minInt = items.length ? Math.min(...items.map((k) => (k.reps === 0 ? -1 : k.interval))) : -1;
-    const stage = minInt >= 21 ? 4 : minInt >= 7 ? 3 : minInt >= 1 ? 2 : minInt === 0 ? 1 : 0;
-    const stageLabel = ["new", "learning", "learning", "known", "mastered"][stage];
     return (
       <Card style={{ marginBottom: 12, padding: 0, overflow: "hidden" }}>
         <View>
@@ -143,9 +140,6 @@ export default function LibraryScreen({ data, setData, startSession }: {
           }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Text style={s.quickGo}>▶ drill</Text>
           </TouchableOpacity>
-          <Text style={s.mastery}>
-            {"●".repeat(Math.max(1, stage)) + "○".repeat(4 - Math.max(1, stage))} {stageLabel}
-          </Text>
           <Text style={s.meta}>
             {items.length} exercises{due > 0 ? ` · ${due} due` : ""}
             {c.seenCount > 1 ? ` · seen in ${c.seenCount} lessons` : ""}
@@ -378,10 +372,6 @@ const s = StyleSheet.create({
   emptyLib: { alignItems: "center", backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderRadius: 22, padding: 26, marginTop: 8 },
   emptyLibTitle: { fontSize: 18, fontWeight: "800", color: C.ink, marginTop: 8 },
   emptyLibSub: { fontSize: 13, color: C.muted, textAlign: "center", marginTop: 6, lineHeight: 19 },
-  masteryCard: { backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderRadius: 16, padding: 14, marginBottom: 14 },
-  masteryBar: { flexDirection: "row", height: 10, borderRadius: 5, overflow: "hidden", backgroundColor: C.line },
-  masteryLegend: { flexDirection: "row", justifyContent: "space-between", marginTop: 8 },
-  masteryLegendText: { fontSize: 12.5, fontWeight: "800" },
   stageBadge: { position: "absolute", top: 10, right: 10, backgroundColor: "rgba(255,255,255,0.92)", borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
   stageBadgeText: { fontSize: 11, fontWeight: "800" },
   lessonBadge: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", marginRight: 10 },
@@ -423,5 +413,4 @@ const s = StyleSheet.create({
   foot: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" },
   meta: { fontSize: 12, color: C.muted },
   quickGo: { fontSize: 12, fontWeight: "800", color: C.clay },
-  mastery: { fontSize: 11.5, color: C.pineDeep, fontWeight: "700", letterSpacing: 1 },
 });

@@ -137,8 +137,6 @@ const s = StyleSheet.create({
   },
   fabPlus: { color: "#fff", fontSize: 30, fontWeight: "700", marginTop: -2 },
   loading: { color: C.muted, marginTop: 8 },
-  resumeBar: { backgroundColor: C.purple, marginHorizontal: 14, marginBottom: 8, borderRadius: 16, padding: 12 },
-  resumeText: { color: "#fff", fontWeight: "800", fontSize: 13.5, textAlign: "center" },
   nav: {
     flexDirection: "row", backgroundColor: C.card,
     marginHorizontal: 14, marginBottom: 6, borderRadius: 28,
