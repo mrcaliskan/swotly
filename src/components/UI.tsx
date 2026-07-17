@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Image, Pressable, Text, View, StyleSheet, ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import Svg, { Circle, Ellipse, Path, Line, Polygon, G } from "react-native-svg";
 import { C } from "../theme";
 
 /* "Motion confirms the action" — every press springs back like Duolingo. */
@@ -125,11 +124,11 @@ export function FadeIn({ children, delay = 0 }: { children: React.ReactNode; del
   );
 }
 
-/* Marmalade — the bespectacled ginger cat wizard, drawn as a real vector
-   illustration (react-native-svg) rather than layering shapes over an emoji
-   or requiring an image asset that could go missing from the bundle. `mood`
-   only moves the wand + eyes (never the head/glasses geometry) so the frame
-   never drifts out of alignment with the face. */
+/* Marmalade — the bespectacled ginger cat wizard. Real artwork (Mustafa's
+   own AI-generated illustration, circle-cropped with a white sticker ring —
+   assets/mascot.png), not drawn shapes. `mood` can't redraw a static image,
+   so it animates the whole badge instead: a small tilt + an optional corner
+   sparkle/tear, layered on top without touching the source art. */
 export function Mascot({ size = 34, mood = "idle" }: {
   size?: number; mood?: "idle" | "happy" | "sad" | "tip";
 }) {
@@ -142,61 +141,23 @@ export function Mascot({ size = 34, mood = "idle" }: {
     loop.start();
     return () => loop.stop();
   }, []);
-  const FUR = "#F0B37E", FUR_DARK = "#DE9257", CREAM = "#FCEFDC", INK = "#3B2A20", PINK = "#F4A9A0";
-  const wandRotate = mood === "sad" ? 62 : mood === "happy" || mood === "tip" ? -46 : -24;
-  const eyesShut = mood === "happy"; // ^‿^ — content, not startled
+  const tilt = mood === "happy" ? "-7deg" : mood === "sad" ? "5deg" : mood === "tip" ? "-4deg" : "0deg";
+  const badge = mood === "happy" ? "✨" : mood === "sad" ? "💧" : mood === "tip" ? "💡" : null;
   return (
     <Animated.View style={{
-      width: size * 1.5, height: size * 1.3, overflow: "hidden",
-      transform: [{ translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [0, -2.5] }) }],
+      width: size, height: size,
+      transform: [
+        { translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [0, -2.5] }) },
+        { rotate: tilt },
+      ],
     }}>
-      <Svg width={size * 1.5} height={size * 1.3} viewBox="0 0 100 90">
-        {/* wand, drawn first so it sits slightly behind the head's edge.
-            Star kept close to the rotation origin (max ~17 units out) so it
-            never swings past the viewBox edge (nearest edge is 22 units from
-            the origin) at any of the three mood angles below. */}
-        <G rotation={wandRotate} origin="78,64">
-          <Path d="M75,62 L83,53" stroke="#9C6B22" strokeWidth={3.5} strokeLinecap="round" />
-          <Polygon points="84,51 86,46 87,51 92,53 87,55 85,60 83,55 78,53 83,51" fill="#F2B705" />
-        </G>
-        {/* ears */}
-        <Path d="M25,38 L15,12 L42,30 Z" fill={FUR_DARK} />
-        <Path d="M75,38 L85,12 L58,30 Z" fill={FUR_DARK} />
-        <Path d="M27,32 L21,17 L38,28 Z" fill={PINK} />
-        <Path d="M73,32 L79,17 L62,28 Z" fill={PINK} />
-        {/* head */}
-        <Circle cx="50" cy="50" r="33" fill={FUR} />
-        <Path d="M36,24 Q39,17 43,14" stroke={FUR_DARK} strokeWidth={3} strokeLinecap="round" fill="none" />
-        <Path d="M64,24 Q61,17 57,14" stroke={FUR_DARK} strokeWidth={3} strokeLinecap="round" fill="none" />
-        <Ellipse cx="50" cy="62" rx="17" ry="12" fill={CREAM} />
-        {/* eyes */}
-        {eyesShut ? (
-          <>
-            <Path d="M32,50 Q38,45 44,50" stroke={INK} strokeWidth={2.6} strokeLinecap="round" fill="none" />
-            <Path d="M56,50 Q62,45 68,50" stroke={INK} strokeWidth={2.6} strokeLinecap="round" fill="none" />
-          </>
-        ) : (
-          <>
-            <Circle cx="38" cy="49" r="3.4" fill={INK} />
-            <Circle cx="62" cy="49" r="3.4" fill={INK} />
-          </>
-        )}
-        {/* nose + mouth */}
-        <Polygon points="46,59 54,59 50,65" fill="#C75B2B" />
-        <Path d="M50,65 Q45,71 39,67" stroke={INK} strokeWidth={2} strokeLinecap="round" fill="none" />
-        <Path d="M50,65 Q55,71 61,67" stroke={INK} strokeWidth={2} strokeLinecap="round" fill="none" />
-        {/* whiskers */}
-        <Line x1="20" y1="58" x2="2" y2="55" stroke={INK} strokeWidth={1.4} strokeLinecap="round" />
-        <Line x1="20" y1="63" x2="1" y2="64" stroke={INK} strokeWidth={1.4} strokeLinecap="round" />
-        <Line x1="80" y1="58" x2="98" y2="55" stroke={INK} strokeWidth={1.4} strokeLinecap="round" />
-        <Line x1="80" y1="63" x2="99" y2="64" stroke={INK} strokeWidth={1.4} strokeLinecap="round" />
-        {/* round glasses, drawn last so they always frame the eyes on top */}
-        <Circle cx="38" cy="49" r="13.5" fill="rgba(255,255,255,0.14)" stroke={INK} strokeWidth={3} />
-        <Circle cx="62" cy="49" r="13.5" fill="rgba(255,255,255,0.14)" stroke={INK} strokeWidth={3} />
-        <Line x1="51.5" y1="49" x2="48.5" y2="49" stroke={INK} strokeWidth={3} />
-        <Line x1="24.5" y1="47" x2="16" y2="43" stroke={INK} strokeWidth={2.4} strokeLinecap="round" />
-        <Line x1="75.5" y1="47" x2="84" y2="43" stroke={INK} strokeWidth={2.4} strokeLinecap="round" />
-      </Svg>
+      <Image source={require("../../assets/mascot.png")} resizeMode="cover"
+        style={{ width: size, height: size, borderRadius: size / 2 }} />
+      {badge && (
+        <Text style={{ position: "absolute", right: -size * 0.06, bottom: -size * 0.06, fontSize: size * 0.34 }}>
+          {badge}
+        </Text>
+      )}
     </Animated.View>
   );
 }
