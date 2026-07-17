@@ -34,6 +34,7 @@ export interface Exercise {
   answer: string;
   choices?: string[];
   hint?: string;
+  domain?: string;       // everyday scenario tag from generation (work, travel…) — used to space out consecutive session questions
   ease: number;
   interval: number;
   due: string;

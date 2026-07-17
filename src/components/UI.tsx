@@ -124,12 +124,52 @@ export function FadeIn({ children, delay = 0 }: { children: React.ReactNode; del
   );
 }
 
-/* Marmalade — the bespectacled ginger cat. Glasses layered over the cat
-   emoji so every platform renders the look. */
-export function Mascot({ size = 34 }: { size?: number }) {
+/* Marmalade — the bespectacled ginger cat wizard. Built entirely from the
+   🐱 emoji (stable geometry on iOS/Apple Color Emoji, which is what Expo Go
+   on iPhone renders) plus drawn glasses + a wand — no image asset required,
+   so it can never go missing/break the bundle. `mood` drives a light
+   animated reaction (wand tilt + sparkle) without touching the face, since
+   swapping to a different cat emoji per mood would shift eye position and
+   throw the glasses out of alignment. */
+export function Mascot({ size = 34, mood = "idle" }: {
+  size?: number; mood?: "idle" | "happy" | "sad" | "tip";
+}) {
+  const bob = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(bob, { toValue: 1, duration: 1300, useNativeDriver: true }),
+      Animated.timing(bob, { toValue: 0, duration: 1300, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  const lens = size * 0.3;
+  const wandTilt = mood === "sad" ? "68deg" : mood === "happy" || mood === "tip" ? "-38deg" : "-15deg";
+  const sparkle = mood === "sad" ? "💧" : "✨";
   return (
-    <Image source={require("../../assets/adaptive-icon.png")}
-      style={{ width: size * 1.35, height: size * 1.35, borderRadius: size * 0.4 }} />
+    <Animated.View style={{
+      width: size * 1.55, height: size * 1.35, alignItems: "flex-start", justifyContent: "flex-end",
+      transform: [{ translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [0, -3] }) }],
+    }}>
+      <View style={{ width: size, height: size }}>
+        <Text style={{ fontSize: size, lineHeight: size * 1.05 }}>🐱</Text>
+        <View style={{
+          position: "absolute", top: size * 0.37, left: size * 0.12,
+          flexDirection: "row", alignItems: "center",
+        }}>
+          <View style={{ width: lens, height: lens, borderRadius: lens / 2, borderWidth: 2, borderColor: "#3B2A20", backgroundColor: "rgba(255,255,255,0.16)" }} />
+          <View style={{ width: size * 0.09, height: 2, backgroundColor: "#3B2A20" }} />
+          <View style={{ width: lens, height: lens, borderRadius: lens / 2, borderWidth: 2, borderColor: "#3B2A20", backgroundColor: "rgba(255,255,255,0.16)" }} />
+        </View>
+      </View>
+      <View style={{
+        position: "absolute", right: -size * 0.14, bottom: size * 0.02,
+        width: size * 0.05, height: size * 0.78, backgroundColor: "#8A5D14", borderRadius: 3,
+        transform: [{ rotate: wandTilt }],
+      }}>
+        <Text style={{ position: "absolute", top: -size * 0.18, left: -size * 0.12, fontSize: size * 0.36 }}>{sparkle}</Text>
+      </View>
+    </Animated.View>
   );
 }
 

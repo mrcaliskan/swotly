@@ -52,7 +52,7 @@ export default function App() {
   if (!data || !splashDone) {
     return (
       <LinearGradient colors={["#0B5C33", "#084425", "#062F1A"]} style={[{ flex: 1 }, s.center]}>
-        <Animated.View style={{ opacity: owlFade, transform: [{ scale: owlScale }] }}>
+        <Animated.View accessible={false} style={{ opacity: owlFade, transform: [{ scale: owlScale }] }}>
           <Mascot size={72} />
         </Animated.View>
         <Animated.Text style={[s.splashBrand, { opacity: owlFade }]}>swotly</Animated.Text>
@@ -100,7 +100,8 @@ export default function App() {
             </TouchableOpacity>
           ))}
           <View style={s.tab}>
-            <TouchableOpacity style={s.fab} onPress={() => setView("add")} activeOpacity={0.85}>
+            <TouchableOpacity style={s.fab} onPress={() => setView("add")} activeOpacity={0.85}
+              accessibilityRole="button" accessibilityLabel="Add a new lesson">
               <Text style={s.fabPlus}>＋</Text>
             </TouchableOpacity>
             <Text style={[s.tabLabel, view === "add" && s.tabOn]}>Add</Text>

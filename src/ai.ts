@@ -292,6 +292,7 @@ export function mergeAnalysis(data: AppData, analysis: { concepts: any[]; story?
         id: rid("e"), conceptId, type,
         prompt: ex.prompt, answer: String(ex.answer),
         hint: typeof ex.hint === "string" ? ex.hint : undefined,
+        domain: typeof ex.domain === "string" && ex.domain.trim() ? ex.domain.trim().toLowerCase() : undefined,
         choices: type === "mcq" || type === "odd" || type === "stress" ? choices : undefined,
         ease: 2.5, interval: 0, due: todayKey(), reps: 0, lapses: 0,
       };

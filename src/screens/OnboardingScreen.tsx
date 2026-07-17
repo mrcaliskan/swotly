@@ -28,7 +28,7 @@ export default function OnboardingScreen({ data, setData, onFinished }: {
 
   return (
     <ScrollView contentContainerStyle={s.wrap}>
-      <Mascot size={58} />
+      <View accessible={false}><Mascot size={58} /></View>
       <Text style={s.brand}>swotly</Text>
       <Text style={s.tagline}>Your lessons, remembered for good.</Text>
 

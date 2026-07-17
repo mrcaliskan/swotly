@@ -13,7 +13,7 @@ import { saveData } from "../storage";
 import { initSpeech, speak, stopSpeech, setVoice } from "../speech";
 import { playSfx, SfxKind } from "../sfx";
 import { fetchImageFor } from "../images";
-import { Btn, Chip, Eyebrow, ImgLoad, ConceptVisual, catTone } from "../components/UI";
+import { Btn, Chip, Eyebrow, ImgLoad, ConceptVisual, catTone, Mascot } from "../components/UI";
 import { C } from "../theme";
 import Confetti from "../components/Confetti";
 import { LinearGradient } from "expo-linear-gradient";
@@ -65,6 +65,33 @@ function CountUp({ to, suffix = "", style }: { to: number; suffix?: string; styl
   return <Text style={style}>{val}{suffix}</Text>;
 }
 
+/** local look-ahead pass: two neighbouring questions sharing a "domain" tag
+    (work, travel, food…) read as the same repeated scenario even when they
+    come from different concepts — swap the second one for the nearest
+    upcoming question with a different domain, deterministically (no
+    Math.random — resume must rebuild the same order every time). Leaves the
+    array untouched wherever domain data is missing (older imports) or a
+    question directly follows its concept's intro (that pairing is deliberate). */
+function diversifyDomains(steps: Step[]): Step[] {
+  const arr = [...steps];
+  const domainOf = (i: number) => {
+    const st = arr[i];
+    return st?.kind === "ex" ? st.ex.domain : undefined;
+  };
+  for (let i = 1; i < arr.length; i++) {
+    const prev = domainOf(i - 1);
+    if (!prev || domainOf(i) !== prev) continue;
+    for (let j = i + 1; j < Math.min(arr.length, i + 6); j++) {
+      if (arr[j].kind !== "ex" || arr[j - 1]?.kind === "intro") continue;
+      const cand = domainOf(j);
+      if (!cand || cand === prev || cand === domainOf(i + 1)) continue;
+      const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+      break;
+    }
+  }
+  return arr;
+}
+
 function buildSteps(ids: string[], data: AppData, style: LearningStyle): Step[] {
   // one queue per concept: optional intro, then exercises easiest-recognition -> hardest-production
   const RANK: Record<string, number> = { stress: 0, mcq: 0, odd: 1, gap: 1, fix: 2, type: 2, flashcard: 2, listen: 3 };
@@ -111,6 +138,8 @@ function buildSteps(ids: string[], data: AppData, style: LearningStyle): Step[] 
     wave++;
     if (wave > 500) break; // safety
   }
+  const diversified = diversifyDomains(steps);
+  steps.length = 0; steps.push(...diversified);
   // story cloze: one narrative covering this session's concepts, if we have one
   const story = (data.stories ?? []).find((st) => st.answers.length >= 2 && st.conceptIds.some((cid) => order.includes(cid)));
   if (story) steps.push({ kind: "story", story });
@@ -168,6 +197,8 @@ export default function SessionScreen({ data, setData, pending, exit }: {
   const [img, setImg] = useState<string | null>(null);
   const [hintShown, setHintShown] = useState(false);
   const [quick, setQuick] = useState(false);
+  const [undoToast, setUndoToast] = useState<{ msg: string; atIdx: number; priorResults: ResultEntry[]; priorData: AppData } | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tick, setTick] = useState(8);          // speed-round countdown, seconds left
   const [timedOut, setTimedOut] = useState(false);
   const gatePulse = useRef(new Animated.Value(0)).current;
@@ -222,7 +253,7 @@ export default function SessionScreen({ data, setData, pending, exit }: {
         setData(next); saveData(next);
       });
     }
-    if (step.kind === "story") { setPool(shuffle([...step.story.answers])); setBuilt([]); }
+    if (step.kind === "story") { setPool(shuffle([...step.story.answers])); setBuilt(new Array(step.story.answers.length).fill("")); }
     if (step.kind === "speedgate") {
       gatePulse.setValue(0);
       Animated.loop(Animated.sequence([
@@ -364,7 +395,28 @@ export default function SessionScreen({ data, setData, pending, exit }: {
     setStepIdx((i) => i + 1);
   };
 
-  const skip = () => { if (ex) { setCombo(0); commit("again", false, true); } };
+  /* "Skip"/"Later" jump straight to the next question with no pause to
+     reconsider (unlike Reveal, which still shows a feedback screen first) —
+     that's exactly where a mistimed tap is costly, so both get a few
+     seconds' undo. Snapshots data BEFORE commit()'s SRS grade update, so
+     undoing fully reverts the exercise's due/interval too, not just the UI. */
+  const flashUndo = (msg: string) => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndoToast({ msg, atIdx: stepIdx, priorResults: results, priorData: data });
+    undoTimer.current = setTimeout(() => setUndoToast(null), 4000);
+  };
+  const undoLast = () => {
+    if (!undoToast) return;
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    persist(undoToast.priorData, undoToast.atIdx, undoToast.priorResults);
+    setResults(undoToast.priorResults);
+    setStepIdx(undoToast.atIdx);
+    stopSpeech(); clearInput();
+    setUndoToast(null);
+    Haptics.selectionAsync();
+  };
+
+  const skip = () => { if (ex) { flashUndo("Skipped"); setCombo(0); commit("again", false, true); } };
 
   const shelveForLater = () => {
     if (!ex) return;
@@ -372,6 +424,7 @@ export default function SessionScreen({ data, setData, pending, exit }: {
     /* the shelved flag rides INSIDE commit's save — a separate save here
        would be overwritten by commit's stale-closure copy of data */
     const next = { ...data, concepts: data.concepts.map((c) => (c.id === cid ? { ...c, shelved: true } : c)) };
+    flashUndo("Saved for later");
     setCombo(0);
     Haptics.selectionAsync();
     setPraise("🔖 Saved to your review shelf — find it in the Library");
@@ -641,7 +694,7 @@ export default function SessionScreen({ data, setData, pending, exit }: {
               const bad = phase === "feedback" && !good;
               return (
                 <Text key={i}
-                  onPress={() => { if (phase === "answer" && word != null) setBuilt((b) => b.filter((_, k) => k !== bi)); }}
+                  onPress={() => { if (phase === "answer" && word) setBuilt((b) => b.map((w, k) => (k === bi ? "" : w))); }}
                   style={{
                     fontWeight: "900",
                     color: good ? C.pine : bad ? C.rose : word ? C.purple : C.muted,
@@ -663,14 +716,17 @@ export default function SessionScreen({ data, setData, pending, exit }: {
               {pool.map((w, i) => {
                 return (
                   <TouchableOpacity key={w + i} disabled={built.includes(w)}
-                    onPress={() => setBuilt((b) => (b.length < st.answers.length ? [...b, w] : b))}
+                    onPress={() => setBuilt((b) => {
+                      const slot = b.findIndex((x) => !x); // first EMPTY blank, not the end — a mid-story removal must refill its own gap
+                      return slot === -1 ? b : b.map((x, k) => (k === slot ? w : x));
+                    })}
                     style={[s.choice, { paddingVertical: 10, opacity: built.includes(w) ? 0.35 : 1 }]}>
                     <Text style={s.choiceText}>{w}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
-            <Btn label="Check" kind="marigold" disabled={built.length < st.answers.length}
+            <Btn label="Check" kind="marigold" disabled={built.some((w) => !w)}
               onPress={() => {
                 setVerdict(matches === st.answers.length ? "correct" : "wrong"); // matches computed at render with full built
                 setPhase("feedback");
@@ -815,14 +871,15 @@ export default function SessionScreen({ data, setData, pending, exit }: {
     choicesRef.current[ex!.id] = shuffle(ex!.choices || []);
   }
   const SpeakBtn = ({ text }: { text: string }) => (
-    <TouchableOpacity onPress={() => speak(text)} style={s.speak}>
+    <TouchableOpacity onPress={() => speak(text)} style={s.speak}
+      accessibilityRole="button" accessibilityLabel="Play pronunciation">
       <Text style={{ fontSize: 18 }}>🔊</Text>
     </TouchableOpacity>
   );
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView contentContainerStyle={[s.wrap, phase === "answer" && s.wrapAnswer]} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={s.wrap} keyboardShouldPersistTaps="handled">
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <TouchableOpacity onPress={exitSaving}><Text style={s.back}>← Save & exit</Text></TouchableOpacity>
           <TouchableOpacity onPress={toggleSound} hitSlop={{ top: 10, bottom: 10, left: 14, right: 14 }} style={s.soundPill}>
@@ -843,6 +900,33 @@ export default function SessionScreen({ data, setData, pending, exit }: {
           </View>
           {combo >= 3 && <Text style={s.comboText}>🔥 {combo}</Text>}
         </View>
+
+        {/* up top, well away from the hint pill near the input below — three
+            evenly-spaced chips, real gaps between them so there's no touch
+            overlap and no risk of a hint tap landing on Skip */}
+        {phase === "answer" && (
+          <View style={s.actionChips}>
+            <TouchableOpacity onPress={reveal} hitSlop={{ top: 8, bottom: 8 }} style={s.actionChip}
+              accessibilityRole="button" accessibilityLabel="Reveal the answer">
+              <Text style={s.actionChipText}>👀 Reveal</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={shelveForLater} hitSlop={{ top: 8, bottom: 8 }} style={s.actionChip}
+              accessibilityRole="button" accessibilityLabel="Save this question for later">
+              <Text style={s.actionChipText}>🔖 Later</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={skip} hitSlop={{ top: 8, bottom: 8 }} style={s.actionChip}
+              accessibilityRole="button" accessibilityLabel="Skip this question">
+              <Text style={s.actionChipText}>Skip →</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {undoToast && (
+          <TouchableOpacity onPress={undoLast} style={s.undoToast}
+            accessibilityRole="button" accessibilityLabel={`${undoToast.msg}. Tap to undo`}>
+            <Text style={s.undoToastText}>↩️ {undoToast.msg} — tap to undo</Text>
+          </TouchableOpacity>
+        )}
 
         <Animated.View style={[s.questionCard, slideStyle, { borderLeftColor: catTone(concept?.category).fg }]}>
           <View style={s.ribbonQ}><Text style={s.ribbonQText}>{({ mcq: "✅ CHOOSE", gap: "🧩 FILL THE GAP", type: "✍️ TYPE IT", flashcard: "✍️ TYPE IT", listen: "🎧 LISTEN", fix: "🔍 FIX THE MISTAKE", stress: "🎯 TAP THE STRESS" } as any)[effType(ex!)] ?? "❓ QUESTION"}</Text></View>
@@ -963,8 +1047,9 @@ export default function SessionScreen({ data, setData, pending, exit }: {
 
         {phase === "answer" && (ex!.hint || concept?.tip) && (
           hintShown ? (
-            <View style={s.hintBox}>
-              <Text style={s.hintText}>💡 {ex!.hint || concept?.tip}</Text>
+            <View style={[s.hintBox, { flexDirection: "row", alignItems: "center", gap: 10 }]}>
+              <Mascot size={26} mood="tip" />
+              <Text style={[s.hintText, { flex: 1, textAlign: "left" }]}>{ex!.hint || concept?.tip}</Text>
             </View>
           ) : (
             <TouchableOpacity onPress={() => setHintShown(true)}
@@ -975,29 +1060,15 @@ export default function SessionScreen({ data, setData, pending, exit }: {
         )}
       </ScrollView>
 
-      {/* pinned above the keyboard (not scrolled with the question) and spaced
-          well apart from the hint pill above + each other, so a hint tap can
-          never land on Skip and a mistimed tap can't hit the wrong action */}
-      {phase === "answer" && (
-        <View style={s.answerActions}>
-          <TouchableOpacity onPress={reveal} hitSlop={{ top: 6, bottom: 6, left: 40, right: 40 }} style={s.actionRow}>
-            <Text style={s.skip}>👀 Reveal</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={shelveForLater} hitSlop={{ top: 6, bottom: 6, left: 40, right: 40 }} style={s.actionRow}>
-            <Text style={s.skip}>🔖 Later</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={skip} hitSlop={{ top: 6, bottom: 6, left: 40, right: 40 }} style={s.actionRow}>
-            <Text style={s.skip}>Skip →</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
       {phase === "feedback" && (
         <View style={s.footer}>
           <Animated.View style={[s.praiseWrap, {
             transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }],
             backgroundColor: verdict === "wrong" ? C.roseBg : C.sage,
           }]}>
+            <View accessible={false} style={{ marginBottom: 4 }}>
+              <Mascot size={30} mood={verdict === "wrong" ? "sad" : "happy"} />
+            </View>
             <Text style={[s.praise, { color: verdict === "wrong" ? C.rose : C.pineDeep }]}>
               {verdict === "correct" && `${praise} ✓`}
               {verdict === "close" && "So close — watch the spelling!"}
@@ -1025,7 +1096,6 @@ export default function SessionScreen({ data, setData, pending, exit }: {
 
 const s = StyleSheet.create({
   wrap: { padding: 18, paddingBottom: 40 },
-  wrapAnswer: { paddingBottom: 190 }, // clears the pinned Reveal/Later/Skip footer
   back: { color: C.pine, fontWeight: "700", fontSize: 14, marginBottom: 14 },
   bar: { height: 6, backgroundColor: C.line, borderRadius: 4, overflow: "hidden", marginBottom: 14 },
   barRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
@@ -1093,7 +1163,11 @@ const s = StyleSheet.create({
   bigSpeak: { alignItems: "center", marginTop: 14 },
   bigSpeakLabel: { fontSize: 12, color: C.muted, marginTop: 4, fontWeight: "700" },
   nudge: { fontSize: 13, color: C.muted, textAlign: "center", marginTop: 12 },
-  skip: { fontSize: 13, color: C.muted, fontWeight: "700", textAlign: "center", marginTop: 14 },
+  actionChips: { flexDirection: "row", gap: 10, marginTop: 12 },
+  actionChip: { flex: 1, backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingVertical: 9, alignItems: "center" },
+  actionChipText: { fontSize: 12.5, fontWeight: "700", color: C.muted },
+  undoToast: { backgroundColor: C.purpleBg, borderRadius: 12, paddingVertical: 9, alignItems: "center", marginTop: 10 },
+  undoToastText: { fontSize: 12.5, fontWeight: "700", color: C.purple },
   hintPill: {
     alignSelf: "center", backgroundColor: C.amberBg, borderRadius: 999,
     paddingHorizontal: 14, paddingVertical: 7, marginTop: 16,
@@ -1136,12 +1210,6 @@ const s = StyleSheet.create({
     backgroundColor: C.paper, borderTopWidth: 1, borderTopColor: C.line,
     paddingHorizontal: 18, paddingTop: 12, paddingBottom: 14,
   },
-  answerActions: {
-    position: "absolute", left: 0, right: 0, bottom: 0,
-    backgroundColor: C.paper, borderTopWidth: 1, borderTopColor: C.line,
-    paddingHorizontal: 18, paddingTop: 8, paddingBottom: 14,
-  },
-  actionRow: { paddingVertical: 11, alignItems: "center" },
   praiseWrap: { borderRadius: 14, padding: 12, alignItems: "center" },
   praise: { fontSize: 16, fontWeight: "700" },
   comboBonus: { fontSize: 12.5, fontWeight: "700", color: C.clay, marginTop: 4 },
