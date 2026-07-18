@@ -87,11 +87,16 @@ export default function HomeScreen({ data, setData, go, startSession, openLesson
   const planToday = data.studyPlan?.days.find((d) => d.date === t);
   let goalPct: number, goalDone: number, goalTotal: number;
   if (planToday) {
-    goalTotal = planToday.exerciseIds.length;
-    const doneExs = planToday.exerciseIds.filter((id) => {
+    /* "done" = graded TODAY (lastGraded), never "ever attempted" (reps>0) —
+       a due review from last week folded into today's plan must NOT already
+       read as complete the instant it appears. Shelved concepts are parked
+       by the user on purpose, so they don't count toward today's target. */
+    const relevantIds = planToday.exerciseIds.filter((id) => {
       const e = data.exercises.find((k) => k.id === id);
-      return e && e.reps > 0;
-    }).length;
+      return e && !data.concepts.find((c) => c.id === e.conceptId)?.shelved;
+    });
+    goalTotal = relevantIds.length;
+    const doneExs = relevantIds.filter((id) => data.exercises.find((k) => k.id === id)?.lastGraded === t).length;
     goalDone = doneExs;
     goalPct = goalTotal ? Math.min(100, Math.round((100 * doneExs) / goalTotal)) : 0;
   } else if (data.studyPlan && data.studyPlan.days.length > 0) {
@@ -230,42 +235,47 @@ export default function HomeScreen({ data, setData, go, startSession, openLesson
             </TouchableOpacity>
             <Stat n={`${data.xp}`} l={`XP · next ${nextLevelAt(data.xp)}`} />
           </View>
-          {showHeat && (
-            <View style={s.levelPanel}>
-              <Text style={s.heatTitle}>Last 4 weeks</Text>
-              {(() => {
-                const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-                const today = new Date();
-                const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-                return (
-                  <>
-                    <View style={s.heatRow}>
-                      <Text style={s.heatWeekLabel}> </Text>
-                      {["M", "T", "W", "T", "F", "S", "S"].map((w, i) => (
-                        <Text key={w + i} style={s.heatDayLetter}>{w}</Text>
-                      ))}
+          {showHeat && (() => {
+            const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+            const parseKey = (k: string) => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
+            const today = new Date();
+            const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+            /* start from the week of the very first logged session, not a fixed
+               "last 4 weeks" — otherwise a brand-new user sees mostly empty,
+               meaningless weeks before they'd even opened the app. Capped at
+               8 weeks so a long-time user doesn't get an ever-growing list. */
+            const firstDate = data.sessions.reduce((min, x) => (x.date < min ? x.date : min), t);
+            const firstMonday = parseKey(firstDate);
+            firstMonday.setDate(firstMonday.getDate() - ((firstMonday.getDay() + 6) % 7));
+            const weeks = Math.max(1, Math.min(8, Math.round((monday.getTime() - firstMonday.getTime()) / (7 * 86400000)) + 1));
+            return (
+              <View style={s.levelPanel}>
+                <Text style={s.heatTitle}>{weeks === 1 ? "This week" : `Last ${weeks} weeks`}</Text>
+                <View style={s.heatRow}>
+                  <Text style={s.heatWeekLabel}> </Text>
+                  {["M", "T", "W", "T", "F", "S", "S"].map((w, i) => (
+                    <Text key={w + i} style={s.heatDayLetter}>{w}</Text>
+                  ))}
+                </View>
+                {[...Array(weeks)].map((_, i) => weeks - 1 - i).map((back) => {
+                  const start = new Date(monday); start.setDate(monday.getDate() - back * 7);
+                  return (
+                    <View key={back} style={s.heatRow}>
+                      <Text style={s.heatWeekLabel}>{start.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</Text>
+                      {[...Array(7)].map((_, i) => {
+                        const d = new Date(start); d.setDate(start.getDate() + i);
+                        const k = iso(d);
+                        const future = k > t;
+                        const active = !future && data.sessions.some((x) => x.date === k && x.done > 0);
+                        return <View key={k} style={[s.heatDot, future && s.heatDotFuture, active && s.heatDotOn, k === t && s.heatDotToday]} />;
+                      })}
                     </View>
-                    {[3, 2, 1, 0].map((back) => {
-                      const start = new Date(monday); start.setDate(monday.getDate() - back * 7);
-                      return (
-                        <View key={back} style={s.heatRow}>
-                          <Text style={s.heatWeekLabel}>{start.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</Text>
-                          {[...Array(7)].map((_, i) => {
-                            const d = new Date(start); d.setDate(start.getDate() + i);
-                            const k = iso(d);
-                            const future = k > t;
-                            const active = !future && data.sessions.some((x) => x.date === k && x.done > 0);
-                            return <View key={k} style={[s.heatDot, future && s.heatDotFuture, active && s.heatDotOn, k === t && s.heatDotToday]} />;
-                          })}
-                        </View>
-                      );
-                    })}
-                  </>
-                );
-              })()}
-              <Text style={s.note}>Each square is a day — green means you showed up. Gaps are human, streaks are earned. 🔥</Text>
-            </View>
-          )}
+                  );
+                })}
+                <Text style={s.note}>Each square is a day — green means you showed up. Gaps are human, streaks are earned. 🔥</Text>
+              </View>
+            );
+          })()}
 
           {showLevels && (
             <View style={s.levelPanel}>
@@ -285,16 +295,31 @@ export default function HomeScreen({ data, setData, go, startSession, openLesson
           {/* week strip */}
           <FadeIn delay={140}>
           {(() => {
-            const q1 = !!todayLog;
-            const q2 = !!todayLog && todayLog.done > 0 && (100 * todayLog.correct) / todayLog.done >= 70;
-            const q3 = (todayLog?.xp ?? 0) >= 30;
-            const all = q1 && q2 && q3;
+            const log = todayLog;
+            // deterministic per-day pick — same 3 quests all day, different tomorrow
+            let dayHash = 0;
+            for (let i = 0; i < t.length; i++) dayHash = (dayHash * 31 + t.charCodeAt(i)) | 0;
+            dayHash = Math.abs(dayHash);
+            const activeLessons = data.lessons.filter((l) => data.concepts.some((c) => c.lessonId === l.id && !c.shelved));
+            const featured = activeLessons.length ? activeLessons[dayHash % activeLessons.length] : null;
+            const featuredTitles = featured ? new Set(data.concepts.filter((c) => c.lessonId === featured.id).map((c) => c.title)) : null;
+            const xpTarget = 40 + (dayHash % 4) * 10; // 40/50/60/70 — a real chunk of a session, not the first 4 questions
+            const base = [
+              { done: !!log && log.done > 0, text: "Complete a session" },
+              { done: !!log && log.done > 0 && (100 * log.correct) / log.done >= 70, text: "Score 70% or better" },
+            ];
+            const rotating = [
+              { done: (log?.xp ?? 0) >= xpTarget, text: `Earn ${xpTarget} XP` },
+              { done: (log?.concepts.length ?? 0) >= 3, text: "Touch 3 different concepts" },
+              { done: (log?.minutes ?? 0) >= 5, text: "Study for 5 minutes" },
+              ...(featured ? [{ done: !!log?.concepts.some((ti) => featuredTitles!.has(ti)), text: `Practise something from "${featured.label}"` }] : []),
+            ];
+            const quests = [...base, rotating[dayHash % rotating.length]];
+            const all = quests.every((q) => q.done);
             return (
               <Card style={[{ marginTop: 14 }, all && { borderColor: "#E8A33D", borderWidth: 2 }] as any}>
                 <Eyebrow>Daily quests</Eyebrow>
-                <Quest done={q1} text="Complete a session" />
-                <Quest done={q2} text="Score 70% or better" />
-                <Quest done={q3} text="Earn 30 XP" />
+                {quests.map((q, i) => <Quest key={i} done={q.done} text={q.text} />)}
                 {all && <Text style={s.questAll}>All quests complete — cracking day! 🎉</Text>}
               </Card>
             );

@@ -287,6 +287,11 @@ export default function AddNotesScreen({ data, setData, go }: {
             <Text style={s.srcMeta}>
               {pdfJob ? `${pdfJob.totalPages} pages, ${pdfJob.chunks.length} sections — full coverage ✓${eta ? " · " + eta : ""}` : `${text.length.toLocaleString()} characters extracted ✓`}
             </Text>
+            {pdfJob && pdfJob.chunks.length > 6 && (
+              <Text style={[s.srcMeta, { marginTop: 4, fontStyle: "italic" }]}>
+                Big file — this can take up to 10 minutes. Feel free to leave the app open and check back.
+              </Text>
+            )}
             {!pdfJob && (
               <TouchableOpacity onPress={() => setShowPaste(true)}>
                 <Text style={s.srcEdit}>Review / edit text</Text>

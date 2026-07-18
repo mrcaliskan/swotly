@@ -116,12 +116,13 @@ Rules — BE TERSE, the reply is truncated if long:
 - TENSE VARIETY: when the concept is a verb or phrasal verb, vary its grammatical form across the exercises — past simple ("got through"), present perfect ("has got through"), -ing form, third person — never the base form every time.
 - "hint": a short nudge (max 12 words) that points the learner the right way WITHOUT revealing or containing the answer (e.g. meaning paraphrase, first-letter clue, or usage situation).
 - Notes often use "wrong -> right" corrections: make the learner produce the natural British form.
-- mcq distractors must be plausible learner errors, not random words.
+- mcq/odd distractors must be genuinely tempting, never eliminable at a glance: same part of speech and similar length/register as the answer, drawn from real learner confusions — near-synonyms, false friends, classic collocation mix-ups, or a wrong-but-close tense/form of the same word. Reject any distractor that's a different word class, nonsensical in the sentence, or so unrelated a half-asleep learner would spot it instantly. Someone who half-knows the concept should have to stop and think.
+- CHALLENGE WITHOUT DRIFT: make scenarios require real thought — a subtle context clue, a nearby word/tense that could mislead a careless reader — but the tested phrase must stay the single most natural way to express the concept in that sentence. Harder ≠ obscure: never bury the concept in a convoluted or tangential scenario just to make it tricky.
 - Top-level optional "story": ONE coherent 40-70 word paragraph weaving 3-5 of the concepts, each tested phrase replaced by a numbered blank like [1], [2], [3]; give the phrases in order in "story.answers". The story's scenario must differ from every exercise. Shape: {"story": {"text": "Last week I [1] the meeting…", "answers": ["put off", "…"]}}.
 - mcq and odd MUST carry exactly 4 "choices" including the answer verbatim. NEVER phrase a "Which…?" question as gap or type.
 - gap and type prompts must NOT contain the answer, the concept phrase, or any word of it outside the blank — the sentence must force recall, never display it.
 - "hint" nudges with imagery or context and NEVER contains any word of the answer.
-- fix exercises: "prompt" is a sentence containing EXACTLY ONE learner mistake around the concept (wrong form, wrong particle, wrong word); "answer" is the corrected word or short phrase (1-4 words) that replaces the wrong part. Include 1 fix exercise per concept where a classic mistake exists.
+- fix exercises: "prompt" is a sentence containing EXACTLY ONE learner mistake around the concept (wrong form, wrong particle, wrong word); "answer" is ONLY the corrected word(s) that actually change — never pad it with an adjacent unchanged word from the sentence (e.g. if "was able" should become "have been able", the mistake is just "was"→"have been", so "answer" is "have been", NOT "have been able"). Include 1 fix exercise per concept where a classic mistake exists.
 - ORIGINALITY: give every scene specific texture — named people (Priya, Tom, my flatmate), concrete places (Leeds, the gym, a car boot sale), sensory detail. BAN bland template sentences ("He ___ his homework yesterday."). No two prompts in the ENTIRE reply may open with the same two words or share a sentence skeleton.
 - Rotate grammatical person and tense across a concept's exercises (I/you/she/they · past/present/future/perfect).
 - If a candidate concept is only a minor variant of one of the provided existing titles, SKIP it entirely — never re-teach a near-duplicate under a new name.
@@ -138,19 +139,39 @@ ${notes}`;
    a 429 instantly just hits the same limit again, so back off first. Without
    this, EVERY chunk near the end of a large import can fail back-to-back
    (each retry counted as "done" by the progress bar, which climbs to ~85%
-   on request-completion alone) and the whole import comes back empty. */
+   on request-completion alone) and the whole import comes back empty.
+
+   Separately: the progress bar's ticker formula caps at a HARD 82% for as
+   long as the final wave of up to 3 concurrent chunks is still in flight
+   (3 + 80*min(1,(completed+par)/total) - 1 == 82 once completed+par >= total).
+   fetch() has no built-in timeout — if the LAST chunk's request hangs (no
+   error, no response, just a stalled connection over a mobile network/
+   tunnel), that promise never resolves and the UI sits at 82% forever. The
+   timeout below turns a silent hang into a real error, so it hits the
+   retry/backoff path above instead of freezing the whole import. */
 async function postMessages(apiKey: string, body: any): Promise<any> {
   let res: Response;
   for (let attempt = 0; ; attempt++) {
-    res = await fetch(BASE_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify(body),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 75_000);
+    try {
+      res = await fetch(BASE_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (e: any) {
+      if (attempt >= 2) throw new Error(e?.name === "AbortError" ? "Request timed out — the network stalled." : (e?.message || "Network error"));
+      await new Promise((r) => setTimeout(r, 2500 * 2 ** attempt));
+      continue;
+    } finally {
+      clearTimeout(timer);
+    }
     if (res.status !== 429 || attempt >= 2) break;
     await new Promise((r) => setTimeout(r, 2500 * 2 ** attempt)); // 2.5s, 5s
   }
@@ -248,11 +269,13 @@ export function mergeAnalysis(data: AppData, analysis: { concepts: any[]; story?
       next.concepts.push(concept); added++;
     }
     for (const ex of c.exercises || []) {
-      if (!ex?.prompt || !ex?.answer) continue;
+      if (!ex?.prompt || !ex?.answer || !/[a-zA-Z]/.test(String(ex.answer))) continue; // no letters = PDF punctuation/artifact, not a real answer
       let type = ["flashcard", "mcq", "gap", "type", "listen", "odd", "fix", "stress"].includes(ex.type) ? ex.type : "flashcard";
       /* selection questions keep their options or die — a "Which…?" prompt
          rendered open-ended is unanswerable, so we DROP instead of demoting */
-      let choices: string[] = Array.isArray(ex.choices) ? ex.choices.map((c: any) => String(c).trim()).filter(Boolean) : [];
+      let choices: string[] = Array.isArray(ex.choices)
+        ? ex.choices.map((c: any) => String(c).trim()).filter((c: string) => c && /[a-zA-Z]/.test(c))
+        : [];
       if (type === "mcq" || type === "odd") {
         const ans = String(ex.answer).trim();
         choices = choices.filter((c, i) => choices.findIndex((k) => k.toLowerCase() === c.toLowerCase()) === i); // dedupe

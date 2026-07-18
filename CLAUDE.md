@@ -34,6 +34,22 @@ Wimbledon×RG paleti (`theme.ts`: pine #0B5C33, clay #C75B2B, purple #4F2D7F, kr
 - React stale-closure tuzağı: setData sonrası aynı tick'te persist eden fonksiyonlara güncel veriyi parametreyle geçir (commit'in `base` parametresi örnek).
 - Python yamalarında geniş regex YASAK: dar, assert'li, birebir string eşleşmesi kullan (bir kez buildStudyPlan'ın kuyruğu silindi).
 
+## Bilinen durum (v0.37)
+- v0.37 — 12 maddelik geri bildirim turu:
+- ① Mascot: Mustafa'nın kendi vektörel çizimi (`assets/mascot.png`, 320×320, gerçek alfa şeffaflığı) — kod-çizimi denemeleri (emoji-hack, el-yapımı SVG) hepsi "amatör" bulundu, gerçek sanat kazandı.
+- ② **Kritik kök neden**: `todayKey()`/`daysFromNow()` UTC'ye göre çalışıyordu (`toISOString()`), yerel saate göre değil — Türkiye UTC+3 olduğu için gece yarısı-03:00 arası "gün" bir önceki günmüş gibi hesaplanıyordu. Bu streak'in bazen artmamasının, SRS tekrar tarihlerinin, plan günlerinin kaynağıydı. `types.ts`'te local `dateKey()` helper'ına geçirildi — tüm çağıran yerler (aynı format/imza) otomatik düzeldi.
+- ③ **Kritik kök neden**: "Today's goal %" `e.reps > 0` (YAŞAM BOYU deneme sayacı) kullanıyordu, "bugün yapıldı" değil — yeni bir ders eklenip bugüne bir gün katılınca, o günün İÇİNDEKİ eski due review'ler (geçmişte cevaplanmış) anında "yapıldı" sayılıp % sıçrıyordu. `Exercise.lastGraded` alanı eklendi (sadece GERÇEK cevaplarda damgalanıyor, skip'te değil — `SessionScreen.commit()`), goalPct artık `lastGraded === bugün` kullanıyor.
+- ④ Review shelf artık gerçekten "bir kenara koy" anlamına geliyor: `buildPlan`/`sessionIdsForDay` shelved konseptleri artık otomatik seçime/oturumlara dahil etmiyor, `HomeScreen` goalPct'i de shelved'i toplam hedeften düşüyor (önceden shelve etmek sadece kütüphanede bir etiketti, plan/hedef mantığını hiç etkilemiyordu).
+- ⑤ Daily quests yenilendi: "Complete a session" + "70%+" sabit, 3. quest her gün deterministik olarak değişiyor (XP hedefi 40/50/60/70 rotasyonlu, ya da "3 farklı konsept", "5 dakika çalış", ya da o gün öne çıkan bir dersten pratik) — eski sabit "30 XP" (neredeyse anında kırılan) kaldırıldı.
+- ⑥ Fix tipi sorularda AI'ın cevaba gereksiz bitişik kelime eklemesi (örn. "have been" yerine "have been able") artık `checkFixAnswer` ile toleranslı karşılanıyor + prompt kuralı sıkılaştırıldı.
+- ⑦ MCQ/odd şıkları ve genel soru zorluğu için prompt kuralları güçlendirildi (yeni analizlerde etkili).
+- ⑧ Gap/mcq cevap ve şıklarında harf içermeyen PDF artığı ("/" vb.) artık filtreleniyor.
+- ⑨ Klavye açıkken Reveal/Later/Skip'in kaybolması: kök neden `position:"absolute"` elemanların `KeyboardAvoidingView`'in padding-tabanlı klavye kaçırma davranışından ETKİLENMEMESİYMİŞ — normal akışa alındı (ScrollView flex:1 + actionBar normal sibling).
+- ⑩ %82'de takılma: **gerçek kök neden** ilerleme çubuğu formülünün son eşzamanlı istek dalgası işlemdeyken matematiksel olarak TAM %82'de sabitlenmesiydi (`3+80*min(1,(completed+par)/total)-1`) — `fetch()`'te timeout yoktu, son istek ağ sorunuyla asılı kalırsa süresiz beklerdi. 75s AbortController timeout eklendi.
+- ⑪ Büyük PDF seçiminde "10 dakikaya kadar sürebilir" notu eklendi.
+- ⑫ Onboarding'de gereksiz "Continue" butonu kaldırıldı (seçenek seçince direkt ilerliyor); Library'de ders adı değiştirme (✏️) ve review shelf ▶/✕ ikonları arası boşluk eklendi.
+- NOT: local geliştirme ortamı artık react-native-svg KULLANMIYOR (mascot artık image asset) — svg denemeleri sırasında iki kez eklenip kaldırıldı, KURULUM.md'ye eklemeyin.
+
 ## Bilinen durum (v0.36)
 - v0.36: Mascot artık kod-çizimi değil, Mustafa'nın kendi AI aracıyla ürettiği gerçek illüstrasyon — `assets/mascot.png` (kaynak görsel PowerShell/System.Drawing ile daire kırpılıp beyaz "sticker" çerçevesi eklendi, şeffaf köşeler). `Mascot` bileşeni artık `<Image>` kullanıyor; `mood` prop'u statik görseli yeniden çizemediği için bunun yerine hafif bir tilt animasyonu + köşede küçük bir rozet emoji (✨ happy, 💧 sad, 💡 tip) ekliyor. `react-native-svg` bağımlılığı kaldırıldı (artık hiçbir yerde kullanılmıyor). NOT: assets/icon.png ve app.json'daki sistem ikonu/splash-icon HENÜZ değiştirilmedi (Expo'nun varsayılan ikonları duruyor) — sadece uygulama İÇİ Mascot bileşeni yeni görseli kullanıyor. İstenirse app.json ikon/splash yollarını da mascot.png'ye çevirebiliriz.
 

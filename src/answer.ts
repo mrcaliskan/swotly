@@ -46,3 +46,21 @@ export function checkAnswer(given: string, expected: string): Verdict {
   if (e.length >= 5 && editDistance(g, e) === 1) return "close";
   return "wrong";
 }
+
+/* "fix" exercises ask for just the corrected word(s), but generation
+   sometimes pads the stored answer with one unchanged word from either
+   side of the sentence (e.g. "have been able" when the actual fix is only
+   "have been") — accept the learner's answer if it's exactly one word
+   short of the stored one at either end, so a grammatically complete
+   correction isn't marked wrong over a generation quirk. */
+export function checkFixAnswer(given: string, expected: string): Verdict {
+  const base = checkAnswer(given, expected);
+  if (base === "correct") return base;
+  const g = normalise(given), e = normalise(expected);
+  if (!g) return base;
+  const ew = e.split(" ");
+  if (ew.length - g.split(" ").length === 1) {
+    if (ew.slice(0, -1).join(" ") === g || ew.slice(1).join(" ") === g) return "correct";
+  }
+  return base;
+}

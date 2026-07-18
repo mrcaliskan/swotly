@@ -18,10 +18,11 @@ export interface Plan { items: Exercise[]; meta: PlanMeta; }
 export function buildPlan(data: AppData): Plan {
   const budget = Math.max(3, Math.round((data.settings.minutes * 60) / SECONDS_PER_ITEM));
   const t = todayKey();
+  const shelved = new Set(data.concepts.filter((c) => c.shelved).map((c) => c.id));
   const due = data.exercises
-    .filter((e) => e.reps > 0 && e.due <= t)
+    .filter((e) => e.reps > 0 && e.due <= t && !shelved.has(e.conceptId))
     .sort((a, b) => (a.due < b.due ? -1 : 1));
-  const freshAll = data.exercises.filter((e) => e.reps === 0);
+  const freshAll = data.exercises.filter((e) => e.reps === 0 && !shelved.has(e.conceptId));
 
   const items: Exercise[] = [];
   for (const e of due) { if (items.length >= Math.ceil(budget * 0.7)) break; items.push(e); }
@@ -182,15 +183,16 @@ export function weaveLessonPlan(data: AppData, lessonId: string, daysCount: numb
  *  sittings ("Continue today's plan"), and due SRS reviews slot in on top. */
 export function sessionIdsForDay(data: AppData, day: PlanDay): string[] {
   const t = todayKey();
+  const shelved = new Set(data.concepts.filter((c) => c.shelved).map((c) => c.id));
   const dayExs = day.exerciseIds
     .map((id) => data.exercises.find((e) => e.id === id))
-    .filter(Boolean) as Exercise[];
+    .filter((e): e is Exercise => !!e && !shelved.has(e.conceptId)); // shelved = set aside on purpose, never auto-served
   const notDone = dayExs.filter((e) => e.reps === 0);
   const base = notDone.length > 0 ? notDone : dayExs; // all done → practise again
   const ids = base.map((e) => e.id); // the WHOLE remaining day — what the plan promises is what you get
   if (day.date <= t) {
     const due = data.exercises
-      .filter((e) => e.reps > 0 && e.due <= t && !ids.includes(e.id) && !day.exerciseIds.includes(e.id))
+      .filter((e) => e.reps > 0 && e.due <= t && !shelved.has(e.conceptId) && !ids.includes(e.id) && !day.exerciseIds.includes(e.id))
       .sort((a, b) => (a.due < b.due ? -1 : 1))
       .slice(0, Math.max(3, Math.ceil(ids.length * 0.4)));
     ids.push(...due.map((e) => e.id));

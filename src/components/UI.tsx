@@ -124,11 +124,12 @@ export function FadeIn({ children, delay = 0 }: { children: React.ReactNode; del
   );
 }
 
-/* Marmalade — the bespectacled ginger cat wizard. Real artwork (Mustafa's
-   own AI-generated illustration, circle-cropped with a white sticker ring —
-   assets/mascot.png), not drawn shapes. `mood` can't redraw a static image,
-   so it animates the whole badge instead: a small tilt + an optional corner
-   sparkle/tear, layered on top without touching the source art. */
+/* Marmalade — the bespectacled ginger cat wizard. Mustafa's own vector
+   artwork (true alpha transparency, no background disc needed) — resized
+   once to 320×320 at build time (assets/mascot.png, ~160KB) so it decodes
+   fast at the small sizes this renders at. `mood` can't redraw a static
+   image, so it animates the whole badge instead: a small tilt + a corner
+   sparkle/tear/bulb, layered on top without touching the source art. */
 export function Mascot({ size = 34, mood = "idle" }: {
   size?: number; mood?: "idle" | "happy" | "sad" | "tip";
 }) {
@@ -141,20 +142,19 @@ export function Mascot({ size = 34, mood = "idle" }: {
     loop.start();
     return () => loop.stop();
   }, []);
-  const tilt = mood === "happy" ? "-7deg" : mood === "sad" ? "5deg" : mood === "tip" ? "-4deg" : "0deg";
+  const tilt = mood === "happy" ? "-6deg" : mood === "sad" ? "4deg" : mood === "tip" ? "-3deg" : "0deg";
   const badge = mood === "happy" ? "✨" : mood === "sad" ? "💧" : mood === "tip" ? "💡" : null;
   return (
     <Animated.View style={{
       width: size, height: size,
       transform: [
-        { translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [0, -2.5] }) },
+        { translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [0, -2] }) },
         { rotate: tilt },
       ],
     }}>
-      <Image source={require("../../assets/mascot.png")} resizeMode="cover"
-        style={{ width: size, height: size, borderRadius: size / 2 }} />
+      <Image source={require("../../assets/mascot.png")} resizeMode="contain" style={{ width: size, height: size }} />
       {badge && (
-        <Text style={{ position: "absolute", right: -size * 0.06, bottom: -size * 0.06, fontSize: size * 0.34 }}>
+        <Text style={{ position: "absolute", right: -size * 0.04, top: -size * 0.02, fontSize: size * 0.32 }}>
           {badge}
         </Text>
       )}

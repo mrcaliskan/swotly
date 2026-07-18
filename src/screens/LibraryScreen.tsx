@@ -41,6 +41,15 @@ export default function LibraryScreen({ data, setData, startSession }: {
       [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => removeConcepts(cids, l.id) }]);
   };
 
+  const renameLesson = (l: { id: string; label: string }) => {
+    Alert.prompt("Rename lesson", undefined, (text) => {
+      const label = text?.trim();
+      if (!label || label === l.label) return;
+      const next = { ...data, lessons: data.lessons.map((k) => (k.id === l.id ? { ...k, label } : k)) };
+      setData(next); saveData(next);
+    }, "plain-text", l.label);
+  };
+
   const shelf = data.concepts.filter((c) => c.shelved);
 
   const unshelve = async (cid: string) => {
@@ -268,12 +277,16 @@ export default function LibraryScreen({ data, setData, startSession }: {
                       <View key={c.id} style={s.shelfChip}>
                         <Text style={{ fontSize: 13 }}>{c.emoji || "📘"}</Text>
                         <Text style={s.shelfChipText} numberOfLines={1}>{c.title}</Text>
-                        <TouchableOpacity onPress={() => practiseConcept(c.id)} hitSlop={{ top: 8, bottom: 8, left: 6, right: 4 }}>
-                          <Text style={{ fontSize: 12, fontWeight: "900", color: C.pine }}>▶</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => unshelve(c.id)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 8 }}>
-                          <Text style={{ fontSize: 12, fontWeight: "900", color: C.purple }}>✕</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: "row", gap: 8 }}>
+                          <TouchableOpacity onPress={() => practiseConcept(c.id)} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                            style={[s.shelfIconBtn, { backgroundColor: C.sage }]} accessibilityRole="button" accessibilityLabel={`Practise ${c.title}`}>
+                            <Text style={{ fontSize: 12.5, fontWeight: "900", color: C.pine }}>▶</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => unshelve(c.id)} hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                            style={[s.shelfIconBtn, { backgroundColor: C.purpleBg }]} accessibilityRole="button" accessibilityLabel={`Remove ${c.title} from the shelf`}>
+                            <Text style={{ fontSize: 12.5, fontWeight: "900", color: C.purple }}>✕</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     ))}
                   </View>
@@ -302,7 +315,12 @@ export default function LibraryScreen({ data, setData, startSession }: {
                       {cs.length} concepts{dueCount > 0 ? ` · ${dueCount} due` : ""} · 🏆 {cs.filter((c) => stageOf(c.id) === 4).length} mastered
                     </Text>
                   </View>
-                  <TouchableOpacity onPress={() => confirmDeleteLesson(l)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginRight: 10 }}>
+                  <TouchableOpacity onPress={() => renameLesson(l)} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} style={{ marginRight: 12 }}
+                    accessibilityRole="button" accessibilityLabel={`Rename ${l.label}`}>
+                    <Text style={{ fontSize: 15 }}>✏️</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => confirmDeleteLesson(l)} hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }} style={{ marginRight: 10 }}
+                    accessibilityRole="button" accessibilityLabel={`Delete ${l.label}`}>
                     <Text style={{ fontSize: 15 }}>🗑</Text>
                   </TouchableOpacity>
                   <Text style={s.chev}>{isOpen ? "▲" : "▼"}</Text>
@@ -368,6 +386,7 @@ const s = StyleSheet.create({
   shelfCount: { backgroundColor: C.purple, borderRadius: 999, minWidth: 22, height: 22, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
   shelfCountText: { color: "#fff", fontSize: 12, fontWeight: "900" },
   shelfChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#fff", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, maxWidth: "100%" },
+  shelfIconBtn: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   shelfChipText: { fontSize: 13, fontWeight: "700", color: C.ink, maxWidth: 180 },
   emptyLib: { alignItems: "center", backgroundColor: C.card, borderWidth: 1, borderColor: C.line, borderRadius: 22, padding: 26, marginTop: 8 },
   emptyLibTitle: { fontSize: 18, fontWeight: "800", color: C.ink, marginTop: 8 },

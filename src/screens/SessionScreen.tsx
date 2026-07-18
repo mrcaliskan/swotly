@@ -8,7 +8,7 @@ import {
   ResultEntry, daysFromNow, levelFor, levelTitle, todayKey,
 } from "../types";
 import { gradeExercise } from "../srs";
-import { checkAnswer, Verdict } from "../answer";
+import { checkAnswer, checkFixAnswer, Verdict } from "../answer";
 import { saveData } from "../storage";
 import { initSpeech, speak, stopSpeech, setVoice } from "../speech";
 import { playSfx, SfxKind } from "../sfx";
@@ -290,7 +290,7 @@ export default function SessionScreen({ data, setData, pending, exit }: {
       if (data.settings.sound !== false && accNow >= 60) playSfx("fanfare");
     }
     const t = todayKey();
-    const dAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+    const dAgo = (n: number) => daysFromNow(-n);
     const graded = results.filter((r) => !r.skipped);
     const correct = graded.filter((r) => r.correct).length;
     const perfectBonus = graded.length > 0 && correct === graded.length && graded.length === results.length ? 10 : 0;
@@ -366,12 +366,16 @@ export default function SessionScreen({ data, setData, pending, exit }: {
 
   const judge = (given: string) => {
     if (!ex) return;
-    applyVerdict(checkAnswer(given, ex.answer), ex.answer);
+    const verdict = ex.type === "fix" ? checkFixAnswer(given, ex.answer) : checkAnswer(given, ex.answer);
+    applyVerdict(verdict, ex.answer);
   };
 
   const commit = (grade: Grade, correct: boolean, skipped = false, base: AppData = data) => {
     if (!ex) return;
-    const updated = gradeExercise(ex, grade);
+    // stamp "answered today" only for real answers — a skip shouldn't make
+    // today's goal % look more done than it actually is (same principle as
+    // skips not counting toward session accuracy)
+    const updated = { ...gradeExercise(ex, grade), ...(skipped ? {} : { lastGraded: todayKey() }) };
     const nextResults: ResultEntry[] = [...results, {
       exId: ex.id, grade, correct, skipped,
       cat: (concept?.category ?? "Other") as Category, prompt: ex.prompt,
@@ -879,7 +883,7 @@ export default function SessionScreen({ data, setData, pending, exit }: {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView contentContainerStyle={[s.wrap, phase === "answer" && s.wrapWithActionBar]} keyboardShouldPersistTaps="handled">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.wrap} keyboardShouldPersistTaps="handled">
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <TouchableOpacity onPress={exitSaving}><Text style={s.back}>← Save & exit</Text></TouchableOpacity>
           <TouchableOpacity onPress={toggleSound} hitSlop={{ top: 10, bottom: 10, left: 14, right: 14 }} style={s.soundPill}>
@@ -1102,7 +1106,6 @@ export default function SessionScreen({ data, setData, pending, exit }: {
 
 const s = StyleSheet.create({
   wrap: { padding: 18, paddingBottom: 40 },
-  wrapWithActionBar: { paddingBottom: 170 }, // clears the pinned bar + undo toast, with headroom for larger accessibility text sizes
   back: { color: C.pine, fontWeight: "700", fontSize: 14, marginBottom: 14 },
   bar: { height: 6, backgroundColor: C.line, borderRadius: 4, overflow: "hidden", marginBottom: 14 },
   barRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
@@ -1171,7 +1174,6 @@ const s = StyleSheet.create({
   bigSpeakLabel: { fontSize: 12, color: C.muted, marginTop: 4, fontWeight: "700" },
   nudge: { fontSize: 13, color: C.muted, textAlign: "center", marginTop: 12 },
   actionBar: {
-    position: "absolute", left: 0, right: 0, bottom: 0,
     backgroundColor: C.paper, borderTopWidth: 1, borderTopColor: C.line,
     paddingTop: 10, paddingBottom: 14, paddingHorizontal: 10,
   },

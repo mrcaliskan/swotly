@@ -45,11 +45,10 @@ export default function OnboardingScreen({ data, setData, onFinished }: {
             <Prop icon="🎾" text="Streaks, combos and a proper British voice keep the ten minutes a day rather lovely." />
           </View>
           <Text style={s.question}>How do you like to revise?</Text>
-          <Btn label="🎓 Teach me first" kind={style === "learn" ? "marigold" : "ghost"}
-            onPress={() => setStyle("learn")} style={{ marginTop: 8, alignSelf: "stretch" }} />
-          <Btn label="⚡ Straight to questions" kind={style === "quiz" ? "marigold" : "ghost"}
-            onPress={() => setStyle("quiz")} style={{ marginTop: 10, alignSelf: "stretch" }} />
-          <Btn label="Continue →" onPress={() => setStep(2)} style={{ marginTop: 22, alignSelf: "stretch" }} />
+          <Btn label="🎓 Teach me first" kind="ghost"
+            onPress={() => { setStyle("learn"); setStep(2); }} style={{ marginTop: 8, alignSelf: "stretch" }} />
+          <Btn label="⚡ Straight to questions" kind="ghost"
+            onPress={() => { setStyle("quiz"); setStep(2); }} style={{ marginTop: 10, alignSelf: "stretch" }} />
           <Text style={s.small}>You can change this any time in Settings.</Text>
         </>
       ) : (

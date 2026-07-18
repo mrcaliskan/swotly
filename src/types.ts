@@ -35,6 +35,7 @@ export interface Exercise {
   choices?: string[];
   hint?: string;
   domain?: string;       // everyday scenario tag from generation (work, travel…) — used to space out consecutive session questions
+  lastGraded?: string;   // date this was actually answered (not skipped) — "reps>0" is lifetime, this is "done TODAY"
   ease: number;
   interval: number;
   due: string;
@@ -131,10 +132,15 @@ export const nextLevelAt = (xp: number) => {
 };
 
 export const CATEGORIES: Category[] = ["Grammar", "Vocabulary", "Pronunciation", "Phrases", "Other"];
-export const todayKey = () => new Date().toISOString().slice(0, 10);
+/* local calendar date, NOT UTC — toISOString() shifts by the device's UTC
+   offset (e.g. UTC+3 in Turkey), so the app's "day" used to roll over at
+   03:00 local instead of midnight, causing streaks/due-dates/plan days to
+   occasionally land on the wrong day near that window. */
+const dateKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+export const todayKey = () => dateKey(new Date());
 export const daysFromNow = (n: number) => {
   const d = new Date(); d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  return dateKey(d);
 };
 
 export const LEVEL_TITLES = [
