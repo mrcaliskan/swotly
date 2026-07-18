@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Animated, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet,
+  Animated, Image, Keyboard, Platform, ScrollView, StyleSheet,
   Share, Text, TextInput, TouchableOpacity, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import {
@@ -199,6 +199,19 @@ export default function SessionScreen({ data, setData, pending, exit }: {
   const [quick, setQuick] = useState(false);
   const [undoToast, setUndoToast] = useState<{ msg: string; atIdx: number; priorResults: ResultEntry[]; priorData: AppData } | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* tracked by hand rather than trusted to KeyboardAvoidingView's automatic
+     "padding" behaviour — that behaviour only pushes up NORMAL-FLOW content,
+     and on this screen it was still leaving the bottom action bar under the
+     keyboard in some cases. Explicit height + explicit padding removes the
+     ambiguity entirely. */
+  const [kbHeight, setKbHeight] = useState(0);
+  useEffect(() => {
+    const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const s1 = Keyboard.addListener(showEvt, (e) => setKbHeight(e.endCoordinates?.height ?? 0));
+    const s2 = Keyboard.addListener(hideEvt, () => setKbHeight(0));
+    return () => { s1.remove(); s2.remove(); };
+  }, []);
   const [tick, setTick] = useState(8);          // speed-round countdown, seconds left
   const [timedOut, setTimedOut] = useState(false);
   const gatePulse = useRef(new Animated.Value(0)).current;
@@ -575,6 +588,18 @@ export default function SessionScreen({ data, setData, pending, exit }: {
             <Text style={s.catScore}>{v.c}/{v.t}</Text>
           </View>
         ))}
+        {(() => {
+          const scored = [...byCat.entries()].filter(([, v]) => v.t >= 2).map(([cat, v]) => ({ cat, pct: Math.round((100 * v.c) / v.t) }));
+          if (scored.length < 2) return null;
+          scored.sort((a, b) => b.pct - a.pct);
+          const best = scored[0], worst = scored[scored.length - 1];
+          if (best.pct === worst.pct) return null;
+          return (
+            <Text style={s.note}>
+              🏆 Strongest today: {best.cat} ({best.pct}%){worst.pct < 70 ? ` · Focus next: ${worst.cat} (${worst.pct}%)` : ""}
+            </Text>
+          );
+        })()}
         {tricky.length > 0 && (
           <>
             <Text style={s.section}>Worth another look</Text>
@@ -882,7 +907,7 @@ export default function SessionScreen({ data, setData, pending, exit }: {
   );
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <View style={{ flex: 1, paddingBottom: kbHeight }}>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={s.wrap} keyboardShouldPersistTaps="handled">
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
           <TouchableOpacity onPress={exitSaving}><Text style={s.back}>← Save & exit</Text></TouchableOpacity>
@@ -937,6 +962,11 @@ export default function SessionScreen({ data, setData, pending, exit }: {
               <SpeakBtn text={ex!.answer} />
             </View>
           )}
+          {/* a wrong answer gets the fuller "why" (concept.summary) on top of
+              the quick memory-hook tip — a correct one only needs the hook */}
+          {phase === "feedback" && verdict === "wrong" && concept?.summary ? (
+            <Text style={s.tip}>📖 {concept.summary}</Text>
+          ) : null}
           {phase === "feedback" && concept?.tip ? (
             <Text style={s.tip}>💡 {concept.tip}</Text>
           ) : null}
@@ -1037,36 +1067,56 @@ export default function SessionScreen({ data, setData, pending, exit }: {
         )}
       </ScrollView>
 
-      {/* pinned above the keyboard, well below the question — a single
-          toolbar row (icon over label, hairline dividers) reads as one
-          designed control instead of three loose buttons */}
+      {/* pinned above the keyboard, well below the question. Full icon+label
+          toolbar when there's room; once the keyboard is up, the vertical
+          budget (keyboard + prompt + input + Check + hint) is genuinely too
+          tight for all of it, so this collapses to an icon-only strip —
+          still always reachable, just smaller — freeing enough room for
+          Check/hint to stay visible too instead of being pushed off. */}
       {phase === "answer" && (
-        <View style={s.actionBar}>
+        <View style={[s.actionBar, kbHeight > 0 && s.actionBarCompact]}>
           {undoToast && (
             <TouchableOpacity onPress={undoLast} style={s.undoToast}
               accessibilityRole="button" accessibilityLabel={`${undoToast.msg}. Tap to undo`}>
               <Text style={s.undoToastText}>↩️ {undoToast.msg} — tap to undo</Text>
             </TouchableOpacity>
           )}
-          <View style={{ flexDirection: "row" }}>
-            <TouchableOpacity onPress={reveal} style={s.actionBarItem} hitSlop={{ top: 6, bottom: 6 }}
-              accessibilityRole="button" accessibilityLabel="Reveal the answer">
-              <Text style={s.actionBarIcon}>👀</Text>
-              <Text style={s.actionBarLabel}>Reveal</Text>
-            </TouchableOpacity>
-            <View style={s.actionBarDivider} />
-            <TouchableOpacity onPress={shelveForLater} style={s.actionBarItem} hitSlop={{ top: 6, bottom: 6 }}
-              accessibilityRole="button" accessibilityLabel="Save this question for later">
-              <Text style={s.actionBarIcon}>🔖</Text>
-              <Text style={s.actionBarLabel}>Later</Text>
-            </TouchableOpacity>
-            <View style={s.actionBarDivider} />
-            <TouchableOpacity onPress={skip} style={s.actionBarItem} hitSlop={{ top: 6, bottom: 6 }}
-              accessibilityRole="button" accessibilityLabel="Skip this question">
-              <Text style={s.actionBarIcon}>⏭️</Text>
-              <Text style={s.actionBarLabel}>Skip</Text>
-            </TouchableOpacity>
-          </View>
+          {kbHeight > 0 ? (
+            <View style={{ flexDirection: "row", justifyContent: "center", gap: 32 }}>
+              <TouchableOpacity onPress={reveal} hitSlop={{ top: 8, bottom: 8, left: 14, right: 14 }}
+                accessibilityRole="button" accessibilityLabel="Reveal the answer">
+                <Text style={s.actionBarIconOnly}>👀</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={shelveForLater} hitSlop={{ top: 8, bottom: 8, left: 14, right: 14 }}
+                accessibilityRole="button" accessibilityLabel="Save this question for later">
+                <Text style={s.actionBarIconOnly}>🔖</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={skip} hitSlop={{ top: 8, bottom: 8, left: 14, right: 14 }}
+                accessibilityRole="button" accessibilityLabel="Skip this question">
+                <Text style={s.actionBarIconOnly}>⏭️</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ flexDirection: "row" }}>
+              <TouchableOpacity onPress={reveal} style={s.actionBarItem} hitSlop={{ top: 6, bottom: 6 }}
+                accessibilityRole="button" accessibilityLabel="Reveal the answer">
+                <Text style={s.actionBarIcon}>👀</Text>
+                <Text style={s.actionBarLabel}>Reveal</Text>
+              </TouchableOpacity>
+              <View style={s.actionBarDivider} />
+              <TouchableOpacity onPress={shelveForLater} style={s.actionBarItem} hitSlop={{ top: 6, bottom: 6 }}
+                accessibilityRole="button" accessibilityLabel="Save this question for later">
+                <Text style={s.actionBarIcon}>🔖</Text>
+                <Text style={s.actionBarLabel}>Later</Text>
+              </TouchableOpacity>
+              <View style={s.actionBarDivider} />
+              <TouchableOpacity onPress={skip} style={s.actionBarItem} hitSlop={{ top: 6, bottom: 6 }}
+                accessibilityRole="button" accessibilityLabel="Skip this question">
+                <Text style={s.actionBarIcon}>⏭️</Text>
+                <Text style={s.actionBarLabel}>Skip</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       )}
 
@@ -1099,7 +1149,7 @@ export default function SessionScreen({ data, setData, pending, exit }: {
             style={{ marginTop: 10 }} />
         </View>
       )}
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -1177,8 +1227,10 @@ const s = StyleSheet.create({
     backgroundColor: C.paper, borderTopWidth: 1, borderTopColor: C.line,
     paddingTop: 10, paddingBottom: 14, paddingHorizontal: 10,
   },
+  actionBarCompact: { paddingTop: 6, paddingBottom: 8 },
   actionBarItem: { flex: 1, alignItems: "center", gap: 3, paddingVertical: 4 },
   actionBarIcon: { fontSize: 18 },
+  actionBarIconOnly: { fontSize: 20, paddingVertical: 4 },
   actionBarLabel: { fontSize: 11.5, fontWeight: "700", color: C.muted },
   actionBarDivider: { width: 1, backgroundColor: C.line, marginVertical: 6 },
   undoToast: { backgroundColor: C.purpleBg, borderRadius: 12, paddingVertical: 9, alignItems: "center", marginHorizontal: 8, marginBottom: 8 },

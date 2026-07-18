@@ -34,6 +34,16 @@ Wimbledon×RG paleti (`theme.ts`: pine #0B5C33, clay #C75B2B, purple #4F2D7F, kr
 - React stale-closure tuzağı: setData sonrası aynı tick'te persist eden fonksiyonlara güncel veriyi parametreyle geçir (commit'in `base` parametresi örnek).
 - Python yamalarında geniş regex YASAK: dar, assert'li, birebir string eşleşmesi kullan (bir kez buildStudyPlan'ın kuyruğu silindi).
 
+## Bilinen durum (v0.38)
+- v0.38 — son geri bildirim turu (12 madde):
+- ① **%82 "sorunu" çözüldü değil, TEŞHİS edildi**: canlı log izlemesiyle (postMessages'e geçici `[ai]`/`[pdf]` diagnostic log'ları eklenip kaldırıldı) doğrulandı — hiçbir istek hiç hata vermiyor/asılı kalmıyor. Gerçek kök neden: ilerleme formülü `3+80*min(1,(completed+par)/total)-1`, küçük PDF'lerde (chunk sayısı ≤ concurrency=3) DAHA BAŞTAN %82'ye kilitleniyor ve gerçek istek süresi boyunca (küçük dosyalarda bile 45-60s) hiç hareket etmiyor — bug değil, kötü UX. Ticker artık son dalgada elapsed time'a göre 82→84 arası sürekli kıpırdıyor.
+- ② Klavye + tüm kontroller: `paddingBottom:kbHeight` yaklaşımı Reveal/Later/Skip'i düzeltirken Check/hint'i sıkıştırdı (dikey bütçe matematiksel olarak yetersiz). Çözüm: klavye açıkken actionBar kompakt (ikon-only, tek satır ~40pt) moda geçiyor, tam mod (ikon+etiket) sadece klavye kapalıyken.
+- ③ Mascot: gerçek transparency yokmuş sorunundan sonra "ince siyah ters L çizgi" şikayeti geldi — piksel-seviye doğrulama gösterdi ki dosyada böyle bir çizgi YOK (Read tool'un görüntüleyici artığıydı) — muhtemel gerçek sebep sert (0/255) alfa kenarlarının telefonda küçük boyuta ölçeklenirken yarattığı moiré; 3x3 alfa-only feather (RGB dokunulmadan) uygulandı.
+- ④ Settings'teki "Send a test nudge" butonu küçük bir metin linkine çevrildi (Btn bileşeni her zaman width:100% zorluyor, override edilemiyor — bu yüzden TouchableOpacity+Text'e geçildi).
+- ⑤ Speed round bazı sessionlarda çıkmıyor — BUG DEĞİL, tasarım gereği: buildSteps'te ≥3 mcq/odd tipi soru şartı var (`speedPool.length >= 3`), az sayıda choice-tipi soru içeren küçük/karma sessionlarda round hiç eklenmiyor.
+- ⑥ 2026 UI/UX araştırması (Duolingo AI Video Call/Explain-My-Answer, adaptive difficulty, personalized insights trendleri) sonrası 3 özellik eklendi — hiçbiri canlı AI çağrısı veya yeni bağımlılık gerektirmiyor, hepsi zaten var olan veriyi kullanıyor: (a) yanlış cevapta artık concept.summary da gösteriliyor (sadece tip değil), (b) Home'da "This week" kartı (data.sessions'tan türetilen haftalık XP/accuracy/trend), (c) rapor kartında güçlü/zayıf kategori tek satırlık içgörü.
+- NOT: Bu turun tamamı canlı Metro log izlemesiyle (Monitor tool) doğrulandı — geçici diagnostic log'lar (`[ai]`, `[pdf]`) teşhis sonrası temizlendi, kalıcı kodda yok.
+
 ## Bilinen durum (v0.37)
 - v0.37 — 12 maddelik geri bildirim turu:
 - ① Mascot: Mustafa'nın kendi vektörel çizimi (`assets/mascot.png`, 320×320, gerçek alfa şeffaflığı) — kod-çizimi denemeleri (emoji-hack, el-yapımı SVG) hepsi "amatör" bulundu, gerçek sanat kazandı.

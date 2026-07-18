@@ -326,6 +326,36 @@ export default function HomeScreen({ data, setData, go, startSession, openLesson
           })()}
           </FadeIn>
 
+          {(() => {
+            const parseKey = (k: string) => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
+            const daysAgo = (k: string) => Math.round((parseKey(t).getTime() - parseKey(k).getTime()) / 86400000);
+            const thisWeek = data.sessions.filter((s) => { const d = daysAgo(s.date); return d >= 0 && d < 7; });
+            const lastWeek = data.sessions.filter((s) => { const d = daysAgo(s.date); return d >= 7 && d < 14; });
+            if (thisWeek.length === 0) return null;
+            const sum = (arr: typeof data.sessions, key: "xp" | "done" | "correct") => arr.reduce((s, x) => s + x[key], 0);
+            const thisXp = sum(thisWeek, "xp"), thisDone = sum(thisWeek, "done"), thisCorrect = sum(thisWeek, "correct");
+            const thisAcc = thisDone ? Math.round((100 * thisCorrect) / thisDone) : 0;
+            const lastXp = sum(lastWeek, "xp");
+            const xpDelta = lastXp > 0 ? Math.round((100 * (thisXp - lastXp)) / lastXp) : null;
+            const trendLine = xpDelta === null ? "First full week of data — keep going!"
+              : xpDelta > 5 ? `↑ ${xpDelta}% more XP than last week — cracking on.`
+              : xpDelta < -5 ? `↓ ${Math.abs(xpDelta)}% less XP than last week — a short session still counts.`
+              : "Steady as last week — nice consistency.";
+            return (
+              <FadeIn delay={170}>
+                <Card style={{ marginTop: 14 }}>
+                  <Eyebrow>This week</Eyebrow>
+                  <View style={{ flexDirection: "row", marginTop: 8 }}>
+                    <Stat n={`${thisWeek.length}`} l={thisWeek.length === 1 ? "session" : "sessions"} />
+                    <Stat n={`${thisAcc}%`} l="accuracy" />
+                    <Stat n={`${thisXp}`} l="XP earned" />
+                  </View>
+                  <Text style={[s.note, { marginTop: 8 }]}>{trendLine}</Text>
+                </Card>
+              </FadeIn>
+            );
+          })()}
+
           {data.lessons.length > 0 && (
             <FadeIn delay={200}>
             <Card style={{ marginTop: 14 }}>

@@ -111,11 +111,12 @@ export default function SettingsScreen({ data, setData }: {
         </TouchableOpacity>
       </Modal>
       <Text style={s.note}>One of ten different nudges arrives at this time each day.</Text>
-      <Btn label="Send a test nudge 🔔" kind="ghost" style={{ marginTop: 10 }}
-        onPress={async () => {
+      <TouchableOpacity onPress={async () => {
           const ok = await sendTestNudge();
           if (!ok) Alert.alert("Notifications are off", "Allow notifications for Swotly in iOS Settings to receive nudges.");
-        }} />
+        }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginTop: 10, alignSelf: "flex-start" }}>
+        <Text style={s.testNudgeLink}>Send a test nudge 🔔</Text>
+      </TouchableOpacity>
 
       <Text style={s.label}>Voice</Text>
       <View style={s.pillRow}>
@@ -249,4 +250,5 @@ const s = StyleSheet.create({
     fontSize: 15, backgroundColor: C.card, color: C.ink,
   },
   note: { fontSize: 12.5, color: C.muted, marginTop: 8, lineHeight: 18 },
+  testNudgeLink: { fontSize: 13.5, fontWeight: "700", color: C.pine },
 });

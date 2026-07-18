@@ -167,10 +167,21 @@ export default function AddNotesScreen({ data, setData, go }: {
       if (pr.t0 > 0 && pr.total > 0) {
         const elapsed = (Date.now() - pr.t0) / 1000;
         const per = emaRef.current || pr.prior; // seconds per completion (wall-clock)
-        const est = 3 + 80 * Math.min(0.99, elapsed / (per * pr.total));
         const floor = 3 + 80 * (pr.completed / pr.total);
-        const cap = 3 + 80 * Math.min(1, (pr.completed + pr.par) / pr.total) - 1;
-        setPct((p) => Math.max(p, Math.round(Math.min(cap, Math.max(floor, est)))));
+        const waveFrac = Math.min(1, (pr.completed + pr.par) / pr.total);
+        let est: number;
+        if (waveFrac < 1) {
+          est = 3 + 80 * Math.min(0.99, elapsed / (per * pr.total));
+        } else {
+          /* every remaining chunk is already in flight — there's no next
+             milestone to anticipate, so the old formula just froze at a
+             hard 82% for the whole final wait (small PDFs are ALWAYS in
+             this state from the very first tick). Creep steadily instead,
+             so a 45–60s wait still reads as "working", not "stuck". */
+          const sinceWaveStart = Math.max(0, elapsed - per * Math.max(0, pr.total - pr.par));
+          est = 82 + Math.min(2, (sinceWaveStart / per) * 2);
+        }
+        setPct((p) => Math.max(p, Math.round(Math.max(floor, est))));
       } else {
         setPct((p) => (p < pctTarget - 1 ? Math.max(p, pctBase) + 1 : p));
       }
